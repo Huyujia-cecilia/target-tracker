@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>目标追踪</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#F5F6FA;--card:#FFFFFF;--text:#2D3436;--text-secondary:#636E72;--text-light:#B2BEC3;--border:#E8ECF1;--shadow:0 2px 8px rgba(0,0,0,0.06);--header-h:52px;--radius:12px;--radius-sm:8px;--c-health:#27AE60;--c-study:#2980B9;--c-work:#E67E22;--c-custom:#8E44AD}
+html,body{height:100%;overflow:hidden}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--text);font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
+#app{display:flex;flex-direction:column;height:100%;max-width:480px;margin:0 auto;position:relative}
+header{display:flex;align-items:center;height:var(--header-h);padding:0 16px;background:var(--card);border-bottom:1px solid var(--border);flex-shrink:0;position:sticky;top:0;z-index:10}
+#backBtn{background:none;border:none;font-size:20px;color:var(--text);padding:8px 4px 8px 0;cursor:pointer;display:none;line-height:1;min-width:36px}
+#backBtn.show{display:block}#backBtn.show::before{content:"‹"}
+#title{font-size:18px;font-weight:600;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#headerActions{display:flex;gap:4px;align-items:center}
+#headerActions button{background:none;border:none;padding:8px;cursor:pointer;font-size:18px;color:var(--text-secondary);border-radius:50%;line-height:1}
+#headerActions button:active{background:var(--border)}
+#content{flex:1;overflow-y:auto;padding:12px 16px 80px;scroll-behavior:smooth}
+.group-tabs{display:flex;gap:8px;overflow-x:auto;padding:4px 0 12px;scrollbar-width:none}
+.group-tabs::-webkit-scrollbar{display:none}
+.group-tab{flex-shrink:0;padding:6px 14px;border-radius:20px;border:1.5px solid var(--border);background:var(--card);font-size:14px;color:var(--text-secondary);cursor:pointer;transition:all 0.2s;white-space:nowrap;font-weight:500}
+.group-tab:active{transform:scale(0.96)}
+.group-tab.active{background:var(--text);color:var(--card);border-color:var(--text)}
+.goal-card{background:var(--card);border-radius:var(--radius);padding:16px;margin-bottom:12px;box-shadow:var(--shadow);cursor:pointer;transition:transform 0.15s;position:relative}
+.goal-card:active{transform:scale(0.98)}
+.goal-card-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px}
+.goal-card-name{font-size:16px;font-weight:600;line-height:1.3;flex:1;word-break:break-word;padding-right:8px}
+.goal-card-actions{display:flex;gap:2px;flex-shrink:0}
+.goal-card-actions button{background:none;border:none;padding:6px;cursor:pointer;font-size:14px;color:var(--text-light);border-radius:50%;line-height:1}
+.goal-card-actions button:active{background:var(--border)}
+.goal-card-tag{display:inline-block;padding:2px 10px;border-radius:10px;font-size:12px;font-weight:500;color:#fff;margin-bottom:10px}
+.goal-card-stats{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.goal-card-progress-bar{flex:1;height:8px;background:var(--border);border-radius:4px;overflow:hidden}
+.goal-card-progress-fill{height:100%;border-radius:4px;transition:width 0.4s ease;min-width:0}
+.goal-card-progress-text{font-size:13px;color:var(--text-secondary);font-weight:500;white-space:nowrap;min-width:52px;text-align:right}
+.goal-card-completed{color:var(--c-health);font-weight:600}
+.grid-wrapper{background:var(--card);border-radius:var(--radius);padding:20px 16px 16px;box-shadow:var(--shadow);margin-bottom:16px}
+.grid-title{font-size:14px;color:var(--text-secondary);text-align:center;margin-bottom:12px;font-weight:500}
+.grid-10x10{display:grid;grid-template-columns:repeat(10,1fr);gap:3px;max-width:340px;margin:0 auto;aspect-ratio:1}
+.grid-cell{aspect-ratio:1;border-radius:3px;background:var(--border);transition:all 0.3s ease;position:relative;overflow:hidden}
+.grid-cell.filled{transform:scale(1)}
+.grid-cell.filled::after{content:"";position:absolute;inset:3px;border-radius:2px;background:currentColor;opacity:0.9}
+.grid-cell.just-filled{animation:cellFill 0.4s cubic-bezier(0.34,1.56,0.64,1)}
+@keyframes cellFill{0%{transform:scale(0.3);opacity:0}50%{transform:scale(1.15)}100%{transform:scale(1);opacity:1}}
+.detail-header-info{padding:4px 0 16px}
+.detail-name{font-size:20px;font-weight:700;margin-bottom:6px;line-height:1.3}
+.detail-tag{display:inline-block;padding:3px 12px;border-radius:12px;font-size:13px;font-weight:500;color:#fff}
+.detail-stats{display:flex;gap:16px;margin:16px 0;padding:12px 16px;background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow)}
+.detail-stat{text-align:center;flex:1}
+.detail-stat-value{font-size:22px;font-weight:700}
+.detail-stat-label{font-size:12px;color:var(--text-secondary);margin-top:2px}
+.btn-complete{display:block;width:100%;padding:16px;border:none;border-radius:var(--radius);font-size:17px;font-weight:600;cursor:pointer;transition:all 0.2s;background:var(--c-health);color:#fff;margin-bottom:12px}
+.btn-complete:active{transform:scale(0.98);opacity:0.9}
+.btn-complete:disabled{background:var(--border);color:var(--text-light);cursor:default;transform:none}
+.btn-complete.done{background:#E8F8F5;color:var(--c-health)}
+.form-group{margin-bottom:20px}
+.form-label{display:block;font-size:14px;font-weight:600;color:var(--text-secondary);margin-bottom:6px}
+.form-input,.form-select{width:100%;padding:12px 14px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:16px;color:var(--text);background:var(--card);outline:none;transition:border-color 0.2s;font-family:inherit}
+.form-input:focus,.form-select:focus{border-color:var(--text)}
+.form-select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2712%27 height=%278%27 viewBox=%270 0 12 8%27%3E%3Cpath d=%27M1 1l5 5 5-5%27 stroke=%27%23636E72%27 stroke-width=%271.5%27 fill=%27none%27 stroke-linecap=%27round%27/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;padding-right:36px}
+.btn-save{width:100%;padding:14px;border:none;border-radius:var(--radius);font-size:17px;font-weight:600;background:var(--text);color:var(--card);cursor:pointer;transition:opacity 0.2s}
+.btn-save:active{opacity:0.8}
+.form-error{color:#E74C3C;font-size:13px;margin-top:4px;display:none}
+.fab{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);width:56px;height:56px;border-radius:50%;border:none;background:var(--text);color:var(--card);font-size:28px;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,0.2);z-index:20;display:flex;align-items:center;justify-content:center;transition:transform 0.2s,opacity 0.2s;padding-bottom:2px;line-height:1}
+.fab:active{transform:translateX(-50%) scale(0.92)}
+.fab.hide{transform:translateX(-50%) scale(0);opacity:0;pointer-events:none}
+.modal-overlay{display:none;position:fixed;inset:0;z-index:100;background:rgba(0,0,0,0.4);align-items:center;justify-content:center;padding:32px}
+.modal-overlay.show{display:flex}
+.modal-box{background:var(--card);border-radius:var(--radius);padding:24px 20px 16px;max-width:320px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.15)}
+.modal-message{font-size:16px;text-align:center;margin-bottom:20px;line-height:1.5}
+.modal-actions{display:flex;gap:12px}
+.modal-actions button{flex:1;padding:12px;border-radius:var(--radius-sm);font-size:15px;font-weight:600;cursor:pointer;border:none;transition:opacity 0.15s}
+.modal-actions button:active{opacity:0.8}
+.btn-modal-cancel{background:var(--border);color:var(--text)}
+.btn-modal-confirm{background:var(--text);color:var(--card)}
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;text-align:center}
+.empty-state-icon{font-size:48px;margin-bottom:12px;opacity:0.6}
+.empty-state-text{font-size:15px;color:var(--text-secondary);line-height:1.6}
+.toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--text);color:var(--card);padding:10px 20px;border-radius:8px;font-size:14px;font-weight:500;opacity:0;transition:all 0.3s ease;z-index:50;white-space:nowrap;pointer-events:none}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+@media(min-width:480px){#app{border-left:1px solid var(--border);border-right:1px solid var(--border)}}
+.type-radio-group{display:flex;gap:16px;margin:0 0 20px}.type-radio{display:flex;align-items:center;gap:6px;font-size:15px;cursor:pointer;color:var(--text-secondary);padding:10px 14px;border:1.5px solid var(--border);border-radius:var(--radius-sm);flex:1;justify-content:center;transition:all .2s}.type-radio input[type=radio]{display:none}.type-radio:has(input:checked),.type-radio.checked{background:var(--text);border-color:var(--text);color:var(--card)}.today-section{margin-top:20px;border-top:1px solid var(--border);padding-top:14px}.today-section-title{font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:10px}.today-item{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--card);border-radius:var(--radius-sm);margin-bottom:6px;box-shadow:var(--shadow)}.today-item-check{font-size:14px;font-weight:700}.today-item-name{font-size:14px;font-weight:500;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.today-item-tag{font-size:11px;padding:1px 8px;border-radius:8px;color:#fff}.today-item-hours{font-size:12px;color:var(--text-secondary)}</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <button id="backBtn"></button>
+    <h1 id="title">目标追踪</h1>
+    <div id="headerActions"></div>
+  </header>
+  <div id="content"></div>
+  <button class="fab" id="fab">+</button>
+  <div class="toast" id="toast"></div>
+</div>
+<div class="modal-overlay" id="modal">
+  <div class="modal-box">
+    <div class="modal-message" id="modalMessage"></div>
+    <div class="modal-actions">
+      <button class="btn-modal-cancel" id="modalCancel">取消</button>
+      <button class="btn-modal-confirm" id="modalConfirm">确定</button>
+    </div>
+  </div>
+</div>
+<script>
+const DEFAULT_GROUPS=[{id:"health",name:"健康",color:"#27AE60"},{id:"study",name:"学习",color:"#2980B9"},{id:"work",name:"工作",color:"#E67E22"},{id:"custom",name:"自定义",color:"#8E44AD"}];
+const MAX_DAYS=100,STORAGE_KEY="goal_tracker_data";
+let data={groups:[],goals:[]},currentView="dashboard",currentGoalId=null,filterGroupId=null,editingGoalId=null;
+function todayStr(){const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
+function loadData(){try{const r=localStorage.getItem(STORAGE_KEY);if(r){const p=JSON.parse(r);data.groups=p.groups||DEFAULT_GROUPS.map(g=>({...g}));data.goals=p.goals||[]}else{data.groups=DEFAULT_GROUPS.map(g=>({...g}));data.goals=[]}}catch{data.groups=DEFAULT_GROUPS.map(g=>({...g}));data.goals=[]}}
+function saveData(){localStorage.setItem(STORAGE_KEY,JSON.stringify({groups:data.groups,goals:data.goals}))}
+function genId(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6)}
+function getGoal(id){return data.goals.find(g=>g.id===id)}
+function getGroup(id){return data.groups.find(g=>g.id===id)||data.groups[0]}
+function goalProgress(g){const c=g.completedDates?g.completedDates.filter(d=>d).length:0;return Math.min(c,MAX_DAYS)}
+function todayDone(g){return g.completedDates&&g.completedDates.includes(todayStr())}
+function goalComplete(g){return goalProgress(g)>=MAX_DAYS}
+function filteredGoals(){let l=data.goals;if(filterGroupId)l=l.filter(g=>g.groupId===filterGroupId);return l}
+let toastTimer=null;function showToast(msg){const e=document.getElementById("toast");e.textContent=msg;e.classList.add("show");clearTimeout(toastTimer);toastTimer=setTimeout(()=>e.classList.remove("show"),2000)}
+let modalResolve=null;function showModal(msg){return new Promise(r=>{document.getElementById("modalMessage").innerHTML=msg;document.getElementById("modal").classList.add("show");modalResolve=r})}
+function navigate(v,g){currentView=v;currentGoalId=g;render()}
+function escHtml(s){const d=document.createElement("div");d.textContent=s;return d.innerHTML}
+function render(){const c=document.getElementById("content"),b=document.getElementById("backBtn"),t=document.getElementById("title"),ha=document.getElementById("headerActions"),fab=document.getElementById("fab");ha.innerHTML="";if(currentView==="dashboard"){b.classList.remove("show");t.textContent="目标追踪";fab.classList.remove("hide");renderDashboard(c)}else if(currentView==="goal-detail"){b.classList.add("show");const g=getGoal(currentGoalId);t.textContent=g?g.name:"目标详情";fab.classList.add("hide");if(g){const d=document.createElement("button");d.innerHTML="🗑";d.title="删除目标";d.onclick=()=>handleDeleteGoal(g.id);ha.appendChild(d)}renderGoalDetail(c,currentGoalId)}else if(currentView==="goal-form"){b.classList.add("show");t.textContent=editingGoalId?"编辑目标":"新建目标";fab.classList.add("hide");renderGoalForm(c,editingGoalId)}}
+function renderDashboard(container){let html="<div class=\"group-tabs\">";html+="<button class=\"group-tab"+(filterGroupId?"":" active")+"\" data-group=\"\">全部</button>";for(const g of data.groups)html+="<button class=\"group-tab"+(filterGroupId===g.id?" active":"")+"\" data-group=\""+g.id+"\">"+escHtml(g.name)+"</button>";html+="</div>";container.innerHTML=html;container.querySelectorAll(".group-tab").forEach(el=>{el.addEventListener("click",()=>{const gid=el.dataset.group||null;if(filterGroupId!==gid){filterGroupId=gid;render()}})});const ld=document.createElement("div");ld.style.marginTop="4px";container.appendChild(ld);const filtered=filteredGoals();if(filtered.length===0){ld.innerHTML="<div class=\"empty-state\"><div class=\"empty-state-icon\">📋</div><div class=\"empty-state-text\">"+(data.goals.length===0?"还没有目标，点击下方 + 按钮添加第一个目标！":"该分类下还没有目标")+"</div></div>";return}filtered.sort((a,b)=>{const aD=goalComplete(a)?1:0,bD=goalComplete(b)?1:0;if(aD!==bD)return aD-bD;return(b.createdAt||"").localeCompare(a.createdAt||"")});for(const goal of filtered){const grp=getGroup(goal.groupId),prog=goalProgress(goal),pct=Math.round(prog/MAX_DAYS*100),done=goalComplete(goal);const card=document.createElement("div");card.className="goal-card";card.innerHTML="<div class=\"goal-card-header\"><div class=\"goal-card-name\">"+escHtml(goal.name)+"</div><div class=\"goal-card-actions\"><button class=\"goal-edit\" data-id=\""+goal.id+"\" title=\"编辑\">✎</button><button class=\"goal-del\" data-id=\""+goal.id+"\" title=\"删除\">✕</button></div></div><span class=\"goal-card-tag\" style=\"background:"+grp.color+"\">"+escHtml(grp.name)+"</span><div class=\"goal-card-stats\"><div class=\"goal-card-progress-bar\"><div class=\"goal-card-progress-fill\" style=\"width:"+pct+"%;background:"+grp.color+"\"></div></div><span class=\"goal-card-progress-text"+(done?" goal-card-completed":"")+"\">"+(done?"✓ "+MAX_DAYS+(goal.type==="duration"?"h":"天"):prog+"/"+MAX_DAYS+(goal.type==="duration"?"h":"天"))+"</span></div>";card.addEventListener("click",e=>{if(!e.target.closest(".goal-card-actions"))navigate("goal-detail",goal.id)});ld.appendChild(card);card.querySelector(".goal-edit").addEventListener("click",e=>{e.stopPropagation();editingGoalId=goal.id;navigate("goal-form")});card.querySelector(".goal-del").addEventListener("click",e=>{e.stopPropagation();handleDeleteGoal(goal.id)})}}const td=todayStr();const todayGoals=data.goals.filter(g=>g.completedDates&&g.completedDates.length&&((g.type==="duration"?g.completedDates.includes(td):g.completedDates.includes(td))));if(todayGoals.length>0){const ts=document.createElement("div");ts.className="today-section";let th="<div class=\"today-section-title\">✓ 今日已完成</div>";for(const g of todayGoals){const gp=getGroup(g.groupId),cnt=g.type==="duration"?g.completedDates.filter(d=>d===td).length:1;th+="<div class=\"today-item\"><span class=\"today-item-check\" style=\"color:"+gp.color+"\">✓</span><span class=\"today-item-name\">"+escHtml(g.name)+"</span><span class=\"today-item-tag\" style=\"background:"+gp.color+"\">"+escHtml(gp.name)+"</span>"+(g.type==="duration"?"<span class=\"today-item-hours\">+"+cnt+"h</span>":"")+"</div>"}ts.innerHTML=th;container.appendChild(ts)}
+function renderGoalDetail(container,goalId){const goal=getGoal(goalId);if(!goal){container.innerHTML="<div class=\"empty-state\"><div class=\"empty-state-text\">目标不存在</div></div>";return}const grp=getGroup(goal.groupId),prog=goalProgress(goal),pct=Math.round(prog/MAX_DAYS*100),done=goalComplete(goal),todayMarked=todayDone(goal);let gridHtml="";for(let i=0;i<MAX_DAYS;i++)gridHtml+="<div class=\"grid-cell"+(i<prog?" filled":"")+"\" style=\"color:"+grp.color+"\"></div>";container.innerHTML="<div class=\"detail-header-info\"><div class=\"detail-name\">"+escHtml(goal.name)+"</div><span class=\"detail-tag\" style=\"background:"+grp.color+"\">"+escHtml(grp.name)+"</span></div><div class=\"detail-stats\"><div class=\"detail-stat\"><div class=\"detail-stat-value\" style=\"color:"+grp.color+"\">"+prog+"</div><div class=\"detail-stat-label\">goal.type==="duration"?"已完成时长":"已完成天数"</div></div><div class=\"detail-stat\"><div class=\"detail-stat-value\">"+(MAX_DAYS-prog)+"</div><div class=\"detail-stat-label\">goal.type==="duration"?"剩余时长":"剩余天数"</div></div><div class=\"detail-stat\"><div class=\"detail-stat-value\">"+pct+"%</div><div class=\"detail-stat-label\">完成进度</div></div></div><div class=\"grid-wrapper\"><div class=\"grid-title\">"+(prog>0?(goal.type==="duration"?"已记录 "+prog+"/"+MAX_DAYS+" 小时":"已填 "+prog+"/"+MAX_DAYS+" 格"):(goal.type==="duration"?"100 小时挑战":"100 天挑战 · 每日打卡"))+"</div><div class=\"grid-10x10\" id=\"grid10x10\">"+gridHtml+"</div></div>"+(done?"<button class=\"btn-complete done\" disabled>"+(goal.type==="duration"?"🎉 已完成 100 小时！":"🎉 已完成 100 天！")+"</button>":(goal.type==="duration"?"<button class=\"btn-complete\" id=\"markCompleteBtn\">✓ 记录一小时</button>":(todayMarked?"<button class=\"btn-complete done\" disabled>✓ 今日已打卡</button>":"<button class=\"btn-complete\" id=\"markCompleteBtn\">✓ 今日完成</button>")))+"<div style=\"text-align:center;margin-top:4px\">"+((goal.type==="duration"&&prog>0?"<button class=\"goal-undo-today\" data-id=\""+goal.id+"\" style=\"background:none;border:none;color:var(--text-light);font-size:13px;cursor:pointer;padding:8px\">撤销上次打卡</button><br>":"")+(goal.type!=="duration"&&todayMarked&&!done?"<button class=\"goal-undo-today\" data-id=\""+goal.id+"\" style=\"background:none;border:none;color:var(--text-light);font-size:13px;cursor:pointer;padding:8px\">撤销今日打卡</button><br>":""))+"<button class=\"goal-reset\" data-id=\""+goal.id+"\" style=\"background:none;border:none;color:var(--text-light);font-size:13px;cursor:pointer;padding:8px\">重置进度</button></div>";document.getElementById("markCompleteBtn")?.addEventListener("click",()=>handleMarkComplete(goal.id));container.querySelector(".goal-reset")?.addEventListener("click",()=>handleResetGoal(goal.id));container.querySelector(".goal-undo-today")?.addEventListener("click",()=>handleUndoToday(goal.id))}
+function renderGoalForm(container,editId){const editing=editId?getGoal(editId):null;container.innerHTML="<div class=\"form-group\"><label class=\"form-label\" for=\"goalName\">目标名称</label><input class=\"form-input\" id=\"goalName\" type=\"text\" placeholder=\"例如：每天阅读30分钟\" value=\""+(editing?escHtml(editing.name):"")+"\" maxlength=\"50\" autocomplete=\"off\"><div class=\"form-error\" id=\"nameError\">请输入目标名称</div></div><div class=\"form-group\"><label class=\"form-label\" for=\"goalGroup\">所属分类</label><select class=\"form-select\" id=\"goalGroup\">"+data.groups.map(g=>"<option value=\""+g.id+"\""+(editing&&editing.groupId===g.id?" selected":"")+">"+escHtml(g.name)+"</option>").join("")+"</select></div><div class="form-group"><label class="form-label">打卡类型</label><div class="type-radio-group"><label class="type-radio"><input type="radio" name="goalType" value="count" checked> 次数打卡</label><label class="type-radio"><input type="radio" name="goalType" value="duration"> 时长打卡</label></div></div><button class=\"btn-save\" id=\"saveGoalBtn\">"+(editing?"保存修改":"创建目标")+"</button>";document.getElementById("saveGoalBtn").addEventListener("click",()=>handleSaveGoal(editId));document.getElementById("goalName").addEventListener("keydown",e=>{if(e.key==="Enter")handleSaveGoal(editId)});setTimeout(()=>document.getElementById("goalName").focus(),100)}
+function handleMarkComplete(goalId){const goal=getGoal(goalId);if(!goal)return;const today=todayStr();if(goal.type!=="duration"&&todayDone(goal)){showToast("今日已打卡");return}if(goalProgress(goal)>=MAX_DAYS){showToast(goal.type==="duration"?"已完成 100 小时挑战！":"已完成 100 天挑战！");return}if(!goal.completedDates)goal.completedDates=[];goal.completedDates.push(today);saveData();render();const grid=document.getElementById("grid10x10");if(grid){const cells=grid.querySelectorAll(".grid-cell"),prog=goalProgress(goal);if(prog>0&&cells[prog-1])cells[prog-1].classList.add("just-filled")}showToast(goal.type==="duration"?"记录成功 +1 小时":"打卡成功！")}
+function handleSaveGoal(editId){const name=document.getElementById("goalName").value.trim();if(!name){document.getElementById("nameError").style.display="block";document.getElementById("goalName").focus();return}document.getElementById("nameError").style.display="none";const ge=document.getElementById("goalGroup");if(editId){const g=getGoal(editId);if(g){g.name=name;g.groupId=ge.value;saveData();showToast("已保存")}}else{const gt=document.querySelector("input[name=goalType]:checked");data.goals.unshift({id:genId(),name:name,groupId:ge.value,type:gt?gt.value:"count",createdAt:todayStr(),completedDates:[]});saveData();showToast("目标已创建")}editingGoalId=null;navigate("dashboard")}
+function handleDeleteGoal(goalId){showModal("确定要删除这个目标吗？<br>所有打卡记录将丢失。").then(c=>{if(c){data.goals=data.goals.filter(g=>g.id!==goalId);saveData();showToast("已删除");if(currentView==="goal-detail"&&currentGoalId===goalId)navigate("dashboard");else render()}})}
+function handleUndoToday(goalId){const goal=getGoal(goalId);if(!goal||!goal.completedDates||!goal.completedDates.length)return;if(goal.type==="duration"){goal.completedDates.pop();saveData();render();showToast("已撤销")}else{const today=todayStr();if(!goal.completedDates.includes(today)){showToast("今日尚未打卡");return}goal.completedDates=goal.completedDates.filter(d=>d!==today);saveData();render();showToast("已撤销今日打卡")}}
+async function handleResetGoal(goalId){showModal("确定要重置进度吗？<br>将清除所有打卡记录。").then(c=>{if(c){const g=getGoal(goalId);if(g){g.completedDates=[];saveData();showToast("进度已重置");render()}}})}
+document.getElementById("backBtn").addEventListener("click",()=>{if(currentView==="goal-detail"||currentView==="goal-form"){editingGoalId=null;navigate("dashboard")}})
+document.getElementById("fab").addEventListener("click",()=>{editingGoalId=null;navigate("goal-form")})
+document.getElementById("modalConfirm").addEventListener("click",()=>{document.getElementById("modal").classList.remove("show");if(modalResolve){modalResolve(true);modalResolve=null}})
+document.getElementById("modalCancel").addEventListener("click",()=>{document.getElementById("modal").classList.remove("show");if(modalResolve){modalResolve(false);modalResolve=null}})
+document.getElementById("modal").addEventListener("click",e=>{if(e.target===e.currentTarget){document.getElementById("modal").classList.remove("show");if(modalResolve){modalResolve(false);modalResolve=null}}})
+loadData();for(const dg of DEFAULT_GROUPS){if(!data.groups.find(g=>g.id===dg.id))data.groups.push({...dg})}
+saveData();navigate("dashboard");
+</script>
+</body>
+</html>
+
